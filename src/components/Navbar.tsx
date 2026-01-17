@@ -14,7 +14,7 @@ import {
     X,
     ChevronDown
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 const navItems = [
@@ -35,6 +35,25 @@ const navItems = [
 export function Navbar() {
     const pathname = usePathname();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setActiveDropdown(null);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    // Close dropdown when pathname changes
+    useEffect(() => {
+        setActiveDropdown(null);
+        setIsMenuOpen(false);
+    }, [pathname]);
 
     return (
         <nav className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-100 h-16">
@@ -49,54 +68,86 @@ export function Navbar() {
                         />
                     </Link>
 
-                    {/* Desktop Navigation */}
-                    <div className="hidden md:flex items-center gap-1">
+                    {/* Desktop/Tablet Navigation */}
+                    <div className="hidden md:flex items-center gap-1" ref={dropdownRef}>
                         {navItems.map((item) => {
                             const isActive = pathname === item.href ||
                                 (item.href !== "/" && pathname.startsWith(item.href) && !pathname.startsWith("/admin"));
                             const Icon = item.icon;
+                            const isDropdownOpen = activeDropdown === item.href;
 
                             return (
-                                <div key={item.href} className="relative group">
-                                    <Link
-                                        href={item.href}
-                                        className={cn(
-                                            "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                                            isActive
-                                                ? "bg-[#E21E36]/10 text-[#E21E36]"
-                                                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                                        )}
-                                    >
-                                        <Icon className="w-4 h-4" />
-                                        <span>{item.label}</span>
-                                        {item.subItems && <ChevronDown className="w-3 h-3 text-gray-400 group-hover:rotate-180 transition-transform" />}
-                                    </Link>
+                                <div
+                                    key={item.href}
+                                    className="relative"
+                                    onMouseEnter={() => item.subItems && setActiveDropdown(item.href)}
+                                    onMouseLeave={() => item.subItems && setActiveDropdown(null)}
+                                >
+                                    <div className="flex items-center">
+                                        <Link
+                                            href={item.href}
+                                            className={cn(
+                                                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                                                isActive
+                                                    ? "bg-[#E21E36]/10 text-[#E21E36]"
+                                                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                                                isDropdownOpen && !isActive && "bg-gray-50"
+                                            )}
+                                        >
+                                            <Icon className="w-4 h-4" />
+                                            <span>{item.label}</span>
+                                        </Link>
 
-                                    {item.subItems && (
-                                        <div className="absolute top-full left-0 pt-2 hidden group-hover:block min-w-[180px]">
-                                            <div className="bg-white border border-gray-100 rounded-xl shadow-xl py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                                                {item.subItems.map((sub) => {
-                                                    const subActive = pathname === sub.href;
-                                                    const SubIcon = sub.icon;
-                                                    return (
-                                                        <Link
-                                                            key={sub.href}
-                                                            href={sub.href}
-                                                            className={cn(
-                                                                "flex items-center gap-2 px-4 py-2 text-sm transition-all duration-200",
-                                                                subActive
-                                                                    ? "bg-[#E21E36]/5 text-[#E21E36] font-semibold"
-                                                                    : "text-gray-600 hover:bg-gray-50 hover:text-[#E21E36]"
-                                                            )}
-                                                        >
-                                                            <SubIcon className="w-3.5 h-3.5" />
-                                                            {sub.label}
-                                                        </Link>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    )}
+                                        {item.subItems && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    setActiveDropdown(isDropdownOpen ? null : item.href);
+                                                }}
+                                                className={cn(
+                                                    "p-2 -ml-2 rounded-lg text-gray-400 hover:text-[#E21E36] transition-colors",
+                                                    isDropdownOpen && "text-[#E21E36]"
+                                                )}
+                                            >
+                                                <ChevronDown className={cn("w-4 h-4 transition-transform duration-200", isDropdownOpen && "rotate-180")} />
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <AnimatePresence>
+                                        {item.subItems && isDropdownOpen && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: 10 }}
+                                                transition={{ duration: 0.15 }}
+                                                className="absolute top-full left-0 pt-2 min-w-[180px]"
+                                            >
+                                                <div className="bg-white border border-gray-100 rounded-xl shadow-xl py-1.5 overflow-hidden">
+                                                    {item.subItems.map((sub) => {
+                                                        const subActive = pathname === sub.href;
+                                                        const SubIcon = sub.icon;
+                                                        return (
+                                                            <Link
+                                                                key={sub.href}
+                                                                href={sub.href}
+                                                                className={cn(
+                                                                    "flex items-center gap-2 px-4 py-2 text-sm transition-all duration-200",
+                                                                    subActive
+                                                                        ? "bg-[#E21E36]/5 text-[#E21E36] font-semibold"
+                                                                        : "text-gray-600 hover:bg-gray-50 hover:text-[#E21E36]"
+                                                                )}
+                                                            >
+                                                                <SubIcon className="w-3.5 h-3.5" />
+                                                                {sub.label}
+                                                            </Link>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
                                 </div>
                             );
                         })}

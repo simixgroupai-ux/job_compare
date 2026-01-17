@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { Company } from "@/types";
 import { Loader2 } from "lucide-react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMap, ZoomControl } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
 // Component to handle map view updates
-function MapUpdater({ center, zoom }: { center: [number, number] | null; zoom: number }) {
+// Component to handle map view updates and controls
+function MapPlugins({ center, zoom }: { center: [number, number] | null; zoom: number }) {
     const map = useMap();
 
     useEffect(() => {
@@ -18,6 +19,15 @@ function MapUpdater({ center, zoom }: { center: [number, number] | null; zoom: n
             });
         }
     }, [center, zoom, map]);
+
+    // Manually add zoom control to ensure it's added after map initialization
+    useEffect(() => {
+        const zoomControl = new L.Control.Zoom({ position: 'bottomright' });
+        map.addControl(zoomControl);
+        return () => {
+            map.removeControl(zoomControl);
+        };
+    }, [map]);
 
     return null;
 }
@@ -31,6 +41,7 @@ interface CompanyMapProps {
 export default function CompanyMap({ companies, selectedCompanyId, onMarkerClick }: CompanyMapProps) {
     const [isMounted, setIsMounted] = useState(false);
 
+    // Custom red marker icon
     // Custom red marker icon
     const redIcon = L.divIcon({
         className: "custom-div-icon",
@@ -79,13 +90,14 @@ export default function CompanyMap({ companies, selectedCompanyId, onMarkerClick
                 zoom={zoomLevel}
                 style={{ height: "100%", width: "100%" }}
                 scrollWheelZoom={true}
+                zoomControl={false}
             >
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
-                <MapUpdater center={hasValidSelectedCoords ? mapCenter : null} zoom={zoomLevel} />
+                <MapPlugins center={hasValidSelectedCoords ? mapCenter : null} zoom={zoomLevel} />
 
                 {companiesWithCoords.map((company) => (
                     <Marker
