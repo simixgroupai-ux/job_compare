@@ -3,12 +3,13 @@
 import { motion } from "framer-motion";
 import {
     JobPositionWithCompany,
-    Benefit,
+    BenefitV2,
     TaxSetting,
     UserDeductions,
     defaultUserDeductions,
-    calculateGrossSalary,
-    calculateNetSalary
+    calculateGrossSalaryV2,
+    calculateNetSalary,
+    getBenefitCalculationLabel
 } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ interface CompareTableProps {
     onRemove: (id: string) => void;
     taxSettings?: TaxSetting[];
     userDeductions?: UserDeductions;
+    salaryMode?: 'min' | 'max' | 'expected';
 }
 
 // Format value
@@ -31,18 +33,8 @@ function formatValue(value: number | null, type: string = 'currency'): string {
 }
 
 // Get benefit display value
-function getBenefitDisplay(benefit: Benefit): string {
-    if (benefit.is_range) {
-        const min = benefit.min_value ?? 0;
-        const max = benefit.max_value ?? 0;
-        if (benefit.calculation_type === 'percentage') return `${min}-${max}%`;
-        if (benefit.calculation_type === 'hourly_rate') return `${min}-${max} Kč/h`;
-        return `${min.toLocaleString("cs-CZ")}-${max.toLocaleString("cs-CZ")} Kč`;
-    }
-    const value = benefit.value ?? 0;
-    if (benefit.calculation_type === 'percentage') return `${value}%`;
-    if (benefit.calculation_type === 'hourly_rate') return `${value} Kč/h`;
-    return `${value.toLocaleString("cs-CZ")} Kč`;
+function getBenefitDisplay(benefit: BenefitV2): string {
+    return getBenefitCalculationLabel(benefit);
 }
 
 // Get all unique benefit keys
@@ -61,7 +53,7 @@ function getAllBenefitKeys(positions: JobPositionWithCompany[]): { key: string; 
 }
 
 // Get benefit for position
-function getBenefit(position: JobPositionWithCompany, key: string): Benefit | undefined {
+function getBenefit(position: JobPositionWithCompany, key: string): BenefitV2 | undefined {
     if (!position.benefits || !Array.isArray(position.benefits)) return undefined;
     return position.benefits.find(b => b.key === key);
 }
@@ -70,7 +62,8 @@ export function CompareTable({
     positions,
     onRemove,
     taxSettings = [],
-    userDeductions = defaultUserDeductions
+    userDeductions = defaultUserDeductions,
+    salaryMode = 'expected'
 }: CompareTableProps) {
     if (positions.length === 0) {
         return (
@@ -92,11 +85,13 @@ export function CompareTable({
 
     // Calculate salaries for each position
     const calculatedData = positions.map(p => {
-        const grossMin = calculateGrossSalary(p, false);
-        const grossMax = calculateGrossSalary(p, true);
+        const grossMin = calculateGrossSalaryV2(p, 'min');
+        const grossMax = calculateGrossSalaryV2(p, 'max');
+        const grossExp = calculateGrossSalaryV2(p, 'expected');
         const { net: netMin, social, health, taxAfterCredits } = calculateNetSalary(grossMin, taxSettings, userDeductions);
         const { net: netMax } = calculateNetSalary(grossMax, taxSettings, userDeductions);
-        return { grossMin, grossMax, netMin, netMax, social, health, tax: taxAfterCredits };
+        const { net: netExp } = calculateNetSalary(grossExp, taxSettings, userDeductions);
+        return { grossMin, grossMax, grossExp, netMin, netMax, netExp, social, health, tax: taxAfterCredits };
     });
 
     // Find best values

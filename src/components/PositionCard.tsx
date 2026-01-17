@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
     JobPositionWithCompany,
-    Benefit,
+    BenefitV2,
     TaxSetting,
-    calculateGrossSalary,
+    calculateGrossSalaryV2,
     calculateNetSalary,
-    defaultUserDeductions
+    defaultUserDeductions,
+    getBenefitCalculationLabel
 } from "@/types";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,38 +55,21 @@ export function PositionCard({
         return value.toLocaleString("cs-CZ") + " Kč";
     };
 
-    // Calculate salaries dynamically
-    const grossMin = calculateGrossSalary(position, false);
-    const grossMax = calculateGrossSalary(position, true);
+    // Calculate salaries dynamically using v2
+    const grossMin = calculateGrossSalaryV2(position, 'min');
+    const grossMax = calculateGrossSalaryV2(position, 'max');
     const { net: netMin } = calculateNetSalary(grossMin, taxSettings, defaultUserDeductions);
     const { net: netMax } = calculateNetSalary(grossMax, taxSettings, defaultUserDeductions);
 
-    const getHighlightedBenefits = (): Benefit[] => {
+    const getHighlightedBenefits = (): BenefitV2[] => {
         if (!position.benefits || !Array.isArray(position.benefits)) return [];
         return position.benefits.slice(0, 3);
     };
 
     const highlightedBenefits = getHighlightedBenefits();
 
-    const formatBenefitDisplay = (benefit: Benefit): string => {
-        if (benefit.is_range) {
-            const min = benefit.min_value ?? 0;
-            const max = benefit.max_value ?? 0;
-            if (benefit.calculation_type === 'percentage') {
-                return `${min}-${max}%`;
-            } else if (benefit.calculation_type === 'hourly_rate') {
-                return `${min}-${max} Kč/h`;
-            }
-            return `${min.toLocaleString("cs-CZ")}-${max.toLocaleString("cs-CZ")} Kč`;
-        }
-
-        const value = benefit.value ?? 0;
-        if (benefit.calculation_type === 'percentage') {
-            return `${value}%`;
-        } else if (benefit.calculation_type === 'hourly_rate') {
-            return `${value} Kč/h`;
-        }
-        return `${value.toLocaleString("cs-CZ")} Kč`;
+    const formatBenefitDisplay = (benefit: BenefitV2): string => {
+        return getBenefitCalculationLabel(benefit);
     };
 
     return (
@@ -97,8 +81,8 @@ export function PositionCard({
             layout
         >
             <Card className={`transition-all duration-300 bg-white ${isSelected
-                    ? "ring-2 ring-[#E21E36] bg-[#E21E36]/5"
-                    : "hover:shadow-lg border-gray-100"
+                ? "ring-2 ring-[#E21E36] bg-[#E21E36]/5"
+                : "hover:shadow-lg border-gray-100"
                 }`}>
                 <CardHeader className="pb-2">
                     <div className="flex items-start justify-between">
@@ -140,11 +124,6 @@ export function PositionCard({
                             <Badge variant="secondary" className="bg-[#E21E36]/10 text-[#E21E36]">
                                 <Clock className="w-3 h-3 mr-1" />
                                 {position.shift_type}
-                            </Badge>
-                        )}
-                        {position.evaluation_level && (
-                            <Badge variant="secondary" className="bg-gray-100 text-gray-700">
-                                {position.evaluation_level}
                             </Badge>
                         )}
                     </div>

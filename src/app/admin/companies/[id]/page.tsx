@@ -6,15 +6,13 @@ import { supabase } from "@/lib/supabase";
 import {
     Company,
     JobPosition,
-    Benefit,
+    BenefitV2,
     TaxSetting,
-    BenefitCalculationType,
     SalaryInputType,
-    calculateGrossSalary,
+    calculateGrossSalaryV2,
     calculateNetSalary,
-    getBaseMonthlySalary,
-    getBaseHourlyRate,
-    defaultUserDeductions
+    defaultUserDeductions,
+    createDefaultBenefitV2
 } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,7 +31,6 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from "@/components/ui/dialog";
 import {
     Table,
@@ -43,13 +40,11 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
     Plus,
     Pencil,
     Trash2,
     Briefcase,
-    X,
     Clock,
     Banknote,
     Building2,
@@ -57,55 +52,35 @@ import {
     Save,
     MapPin,
     Loader2,
-    CheckCircle2
+    TrendingUp,
+    TrendingDown
 } from "lucide-react";
 import Link from "next/link";
 import { parseGoogleMapsUrl } from "@/app/actions/parse-google-maps";
+import { BenefitFormV2 } from "@/components/BenefitFormV2";
 
 interface PositionForm {
     position_name: string;
     department: string;
     shift_type: string;
-    evaluation_level: string;
     salary_input_type: SalaryInputType;
     base_salary: number;
     base_hourly_rate: number;
     housing_allowance: number;
     working_hours_fund: number;
-    benefits: Benefit[];
+    benefits: BenefitV2[];
 }
 
 const defaultPositionForm: PositionForm = {
     position_name: "",
     department: "",
     shift_type: "2 směny",
-    evaluation_level: "RNOR",
     salary_input_type: "monthly",
     base_salary: 0,
     base_hourly_rate: 0,
     housing_allowance: 3000,
     working_hours_fund: 157.5,
     benefits: [],
-};
-
-interface NewBenefitForm {
-    key: string;
-    name: string;
-    calculation_type: BenefitCalculationType;
-    is_range: boolean;
-    value: number;
-    min_value: number;
-    max_value: number;
-}
-
-const defaultNewBenefit: NewBenefitForm = {
-    key: "",
-    name: "",
-    calculation_type: "fixed_amount",
-    is_range: false,
-    value: 0,
-    min_value: 0,
-    max_value: 0,
 };
 
 export default function CompanyDetailAdminPage({ params }: { params: Promise<{ id: string }> }) {
@@ -134,7 +109,6 @@ export default function CompanyDetailAdminPage({ params }: { params: Promise<{ i
     const [isPositionDialogOpen, setIsPositionDialogOpen] = useState(false);
     const [editingPosition, setEditingPosition] = useState<JobPosition | null>(null);
     const [positionForm, setPositionForm] = useState<PositionForm>(defaultPositionForm);
-    const [newBenefit, setNewBenefit] = useState<NewBenefitForm>(defaultNewBenefit);
 
     useEffect(() => {
         fetchData();
@@ -142,7 +116,6 @@ export default function CompanyDetailAdminPage({ params }: { params: Promise<{ i
 
     async function fetchData() {
         try {
-            // Fetch Company
             const { data: companyData } = await supabase
                 .from("companies")
                 .select("*")
@@ -164,7 +137,6 @@ export default function CompanyDetailAdminPage({ params }: { params: Promise<{ i
                 });
             }
 
-            // Fetch Positions
             const { data: positionsData } = await supabase
                 .from("job_positions")
                 .select("*")
@@ -172,7 +144,6 @@ export default function CompanyDetailAdminPage({ params }: { params: Promise<{ i
                 .order("position_name");
             setPositions(positionsData || []);
 
-            // Fetch Tax Settings (for net calculation display)
             const { data: taxData } = await supabase
                 .from("tax_settings")
                 .select("*");
@@ -184,7 +155,6 @@ export default function CompanyDetailAdminPage({ params }: { params: Promise<{ i
         }
     }
 
-    // Company Actions
     async function handleParseGps() {
         if (!companyForm.maps_url) return;
         setGpsLoading(true);
@@ -212,7 +182,6 @@ export default function CompanyDetailAdminPage({ params }: { params: Promise<{ i
                 })
                 .eq("id", id);
 
-            // Refresh local state
             const { data } = await supabase.from("companies").select("*").eq("id", id).single();
             if (data) setCompany(data);
 
@@ -225,11 +194,9 @@ export default function CompanyDetailAdminPage({ params }: { params: Promise<{ i
         }
     }
 
-    // Position Actions
     function openCreatePosition() {
         setEditingPosition(null);
         setPositionForm(defaultPositionForm);
-        setNewBenefit(defaultNewBenefit);
         setIsPositionDialogOpen(true);
     }
 
@@ -239,7 +206,6 @@ export default function CompanyDetailAdminPage({ params }: { params: Promise<{ i
             position_name: position.position_name,
             department: position.department || "",
             shift_type: position.shift_type || "",
-            evaluation_level: position.evaluation_level || "",
             salary_input_type: position.salary_input_type || "monthly",
             base_salary: position.base_salary || 0,
             base_hourly_rate: position.base_hourly_rate || 0,
@@ -247,7 +213,6 @@ export default function CompanyDetailAdminPage({ params }: { params: Promise<{ i
             working_hours_fund: position.working_hours_fund || 157.5,
             benefits: position.benefits || [],
         });
-        setNewBenefit(defaultNewBenefit);
         setIsPositionDialogOpen(true);
     }
 
@@ -272,28 +237,6 @@ export default function CompanyDetailAdminPage({ params }: { params: Promise<{ i
         }
     }
 
-    function addBenefit() {
-        if (!newBenefit.key || !newBenefit.name) return;
-        const benefit: Benefit = {
-            key: newBenefit.key,
-            name: newBenefit.name,
-            calculation_type: newBenefit.calculation_type,
-            is_range: newBenefit.is_range,
-        };
-        if (newBenefit.is_range) {
-            benefit.min_value = newBenefit.min_value;
-            benefit.max_value = newBenefit.max_value;
-        } else {
-            benefit.value = newBenefit.value;
-        }
-        setPositionForm(prev => ({ ...prev, benefits: [...prev.benefits, benefit] }));
-        setNewBenefit(defaultNewBenefit);
-    }
-
-    function removeBenefit(key: string) {
-        setPositionForm(prev => ({ ...prev, benefits: prev.benefits.filter(b => b.key !== key) }));
-    }
-
     async function handleSavePosition(e: React.FormEvent) {
         e.preventDefault();
         try {
@@ -302,7 +245,6 @@ export default function CompanyDetailAdminPage({ params }: { params: Promise<{ i
                 position_name: positionForm.position_name,
                 department: positionForm.department || null,
                 shift_type: positionForm.shift_type || null,
-                evaluation_level: positionForm.evaluation_level || null,
                 salary_input_type: positionForm.salary_input_type,
                 base_salary: positionForm.salary_input_type === 'monthly' ? positionForm.base_salary : calculatedMonthly,
                 base_hourly_rate: positionForm.salary_input_type === 'hourly' ? positionForm.base_hourly_rate : calculatedHourly,
@@ -335,10 +277,15 @@ export default function CompanyDetailAdminPage({ params }: { params: Promise<{ i
     }
 
     const formatCurrency = (value: number) => value > 0 ? `${value.toLocaleString("cs-CZ")} Kč` : "—";
-    const getNetSalary = (pos: JobPosition) => {
-        const gross = calculateGrossSalary(pos, true);
-        const { net } = calculateNetSalary(gross, taxSettings, defaultUserDeductions);
-        return net;
+
+    const getSalaryRange = (pos: JobPosition) => {
+        const grossMin = calculateGrossSalaryV2(pos, 'min');
+        const grossMax = calculateGrossSalaryV2(pos, 'max');
+        const grossExp = calculateGrossSalaryV2(pos, 'expected');
+        const netMin = calculateNetSalary(grossMin, taxSettings, defaultUserDeductions).net;
+        const netMax = calculateNetSalary(grossMax, taxSettings, defaultUserDeductions).net;
+        const netExp = calculateNetSalary(grossExp, taxSettings, defaultUserDeductions).net;
+        return { grossMin, grossMax, grossExp, netMin, netMax, netExp };
     };
 
     if (loading) return <div className="p-8 text-center text-gray-500">Načítám...</div>;
@@ -499,36 +446,51 @@ export default function CompanyDetailAdminPage({ params }: { params: Promise<{ i
                                             <TableHead>Pozice</TableHead>
                                             <TableHead>Oddělení</TableHead>
                                             <TableHead>Směny</TableHead>
-                                            <TableHead>Hrubá (max)</TableHead>
-                                            <TableHead>Čistá (max)</TableHead>
+                                            <TableHead>Hrubá mzda</TableHead>
+                                            <TableHead>Čistá mzda</TableHead>
                                             <TableHead className="text-right">Akce</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {positions.map((pos) => (
-                                            <TableRow key={pos.id}>
-                                                <TableCell className="font-medium">{pos.position_name}</TableCell>
-                                                <TableCell>{pos.department || "—"}</TableCell>
-                                                <TableCell>{pos.shift_type || "—"}</TableCell>
-                                                <TableCell>{formatCurrency(calculateGrossSalary(pos, true))}</TableCell>
-                                                <TableCell className="text-[#E21E36] font-medium">{formatCurrency(getNetSalary(pos))}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <div className="flex justify-end gap-2">
-                                                        <Button size="icon" variant="ghost" onClick={() => openEditPosition(pos)}>
-                                                            <Pencil className="w-4 h-4" />
-                                                        </Button>
-                                                        <Button
-                                                            size="icon"
-                                                            variant="ghost"
-                                                            className="text-red-500 hover:text-red-700"
-                                                            onClick={() => handleDeletePosition(pos.id)}
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </Button>
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
+                                        {positions.map((pos) => {
+                                            const range = getSalaryRange(pos);
+                                            return (
+                                                <TableRow key={pos.id}>
+                                                    <TableCell className="font-medium">{pos.position_name}</TableCell>
+                                                    <TableCell>{pos.department || "—"}</TableCell>
+                                                    <TableCell>{pos.shift_type || "—"}</TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="text-gray-500 text-xs">{formatCurrency(range.grossMin)}</span>
+                                                            <span className="text-gray-400">–</span>
+                                                            <span className="font-medium">{formatCurrency(range.grossMax)}</span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="text-gray-500 text-xs">{formatCurrency(range.netMin)}</span>
+                                                            <span className="text-gray-400">–</span>
+                                                            <span className="font-medium text-[#E21E36]">{formatCurrency(range.netMax)}</span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <div className="flex justify-end gap-2">
+                                                            <Button size="icon" variant="ghost" onClick={() => openEditPosition(pos)}>
+                                                                <Pencil className="w-4 h-4" />
+                                                            </Button>
+                                                            <Button
+                                                                size="icon"
+                                                                variant="ghost"
+                                                                className="text-red-500 hover:text-red-700"
+                                                                onClick={() => handleDeletePosition(pos.id)}
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </Button>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
                                     </TableBody>
                                 </Table>
                             )}
@@ -537,13 +499,16 @@ export default function CompanyDetailAdminPage({ params }: { params: Promise<{ i
                 </div>
             </div>
 
-            {/* Position Dialog */}
+            {/* Position Dialog with BenefitFormV2 */}
             <Dialog open={isPositionDialogOpen} onOpenChange={setIsPositionDialogOpen}>
-                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto font-sans">
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto font-sans">
                     <DialogHeader>
-                        <DialogTitle>{editingPosition ? "Upravit pozici" : "Nová pozice"}</DialogTitle>
+                        <DialogTitle className="text-xl">
+                            {editingPosition ? "Upravit pozici" : "Nová pozice"}
+                        </DialogTitle>
                     </DialogHeader>
                     <form onSubmit={handleSavePosition} className="space-y-6">
+                        {/* Basic Info */}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <Label>Název pozice *</Label>
@@ -573,21 +538,14 @@ export default function CompanyDetailAdminPage({ params }: { params: Promise<{ i
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div>
-                                <Label>Úroveň hodnocení</Label>
-                                <Select value={positionForm.evaluation_level} onValueChange={(v) => setPositionForm({ ...positionForm, evaluation_level: v })}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="RNOR">RNOR (min)</SelectItem>
-                                        <SelectItem value="NORN">NORN (max)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
                         </div>
 
                         {/* Salary Section */}
                         <div className="space-y-4 border-t pt-4">
-                            <h3 className="font-semibold">Mzdové podmínky</h3>
+                            <h3 className="font-semibold flex items-center gap-2">
+                                <Banknote className="w-5 h-5 text-green-600" />
+                                Mzdové podmínky
+                            </h3>
                             <div className="flex gap-2">
                                 <Button
                                     type="button"
@@ -659,48 +617,17 @@ export default function CompanyDetailAdminPage({ params }: { params: Promise<{ i
                             </div>
                         </div>
 
-                        {/* Benefits list */}
+                        {/* Benefits v2 Section */}
                         <div className="space-y-4 border-t pt-4">
-                            <h3 className="font-semibold">Benefity</h3>
-                            <div className="space-y-2">
-                                {positionForm.benefits.map(b => (
-                                    <div key={b.key} className="flex items-center justify-between p-2 bg-slate-50 rounded border">
-                                        <span className="text-sm">
-                                            <strong>{b.name}</strong> ({b.calculation_type}): {b.is_range ? `${b.min_value} - ${b.max_value}` : b.value}
-                                        </span>
-                                        <Button size="icon" variant="ghost" onClick={() => removeBenefit(b.key)}><X className="w-4 h-4 text-red-500" /></Button>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="p-3 border rounded bg-slate-50/50 space-y-3">
-                                <div className="grid grid-cols-2 gap-2">
-                                    <Input placeholder="Klíč (např. bonus)" value={newBenefit.key} onChange={e => setNewBenefit({ ...newBenefit, key: e.target.value })} />
-                                    <Input placeholder="Název (např. Prémie)" value={newBenefit.name} onChange={e => setNewBenefit({ ...newBenefit, name: e.target.value })} />
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <Select value={newBenefit.calculation_type} onValueChange={(v: BenefitCalculationType) => setNewBenefit({ ...newBenefit, calculation_type: v })}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="fixed_amount">Fixní (Kč)</SelectItem>
-                                            <SelectItem value="hourly_rate">Hodinová (Kč/h)</SelectItem>
-                                            <SelectItem value="percentage">Procentuální (%)</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <div className="flex items-center gap-2">
-                                        <Checkbox id="brange" checked={newBenefit.is_range} onCheckedChange={v => setNewBenefit({ ...newBenefit, is_range: !!v })} />
-                                        <Label htmlFor="brange">Rozsah</Label>
-                                    </div>
-                                </div>
-                                {newBenefit.is_range ? (
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <Input type="number" placeholder="Min" value={newBenefit.min_value} onChange={e => setNewBenefit({ ...newBenefit, min_value: parseFloat(e.target.value) })} />
-                                        <Input type="number" placeholder="Max" value={newBenefit.max_value} onChange={e => setNewBenefit({ ...newBenefit, max_value: parseFloat(e.target.value) })} />
-                                    </div>
-                                ) : (
-                                    <Input type="number" placeholder="Hodnota" value={newBenefit.value} onChange={e => setNewBenefit({ ...newBenefit, value: parseFloat(e.target.value) })} />
-                                )}
-                                <Button type="button" size="sm" onClick={addBenefit} variant="secondary">Přidat benefit</Button>
-                            </div>
+                            <h3 className="font-semibold flex items-center gap-2">
+                                <TrendingUp className="w-5 h-5 text-purple-600" />
+                                Benefity a variabilní složky
+                            </h3>
+                            <BenefitFormV2
+                                benefits={positionForm.benefits}
+                                onChange={(benefits) => setPositionForm({ ...positionForm, benefits })}
+                                baseSalary={calculatedMonthly}
+                            />
                         </div>
 
                         <div className="flex justify-end gap-2 p-4 border-t sticky bottom-0 bg-white">

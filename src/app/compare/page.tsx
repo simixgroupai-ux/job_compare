@@ -10,7 +10,7 @@ import {
     UserDeductions,
     InvaliditaTyp,
     defaultUserDeductions,
-    calculateGrossSalary,
+    calculateGrossSalaryV2,
     calculateNetSalary
 } from "@/types";
 import { PositionCard } from "@/components/PositionCard";
@@ -27,7 +27,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { GitCompare, X, Calculator, Settings2, Plus, Minus, Baby, UserCheck } from "lucide-react";
+import { GitCompare, X, Calculator, Settings2, Plus, Minus, Baby, UserCheck, Gauge } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
 
 export default function ComparePage() {
     const [positions, setPositions] = useState<JobPositionWithCompany[]>([]);
@@ -37,6 +38,7 @@ export default function ComparePage() {
     const [loading, setLoading] = useState(true);
     const [selectedCompany, setSelectedCompany] = useState<string>("all");
     const [showDeductions, setShowDeductions] = useState(true);
+    const [salaryExpectation, setSalaryExpectation] = useState(50); // 0-100 scale from min to max
 
     // User deductions state
     const [userDeductions, setUserDeductions] = useState<UserDeductions>(defaultUserDeductions);
@@ -106,8 +108,8 @@ export default function ComparePage() {
 
     // Sort positions by calculated net salary
     const sortedPositions = [...positions].sort((a, b) => {
-        const grossA = calculateGrossSalary(a, true);
-        const grossB = calculateGrossSalary(b, true);
+        const grossA = calculateGrossSalaryV2(a, 'max');
+        const grossB = calculateGrossSalaryV2(b, 'max');
         const { net: netA } = calculateNetSalary(grossA, taxSettings, userDeductions);
         const { net: netB } = calculateNetSalary(grossB, taxSettings, userDeductions);
         return netB - netA;
@@ -344,6 +346,45 @@ export default function ComparePage() {
                             </motion.div>
                         )}
                     </AnimatePresence>
+                </Card>
+            </motion.div>
+
+            {/* Salary Expectation Slider */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+                className="mb-6"
+            >
+                <Card className="bg-white border-gray-100">
+                    <CardContent className="pt-6">
+                        <div className="flex items-center gap-4 mb-4">
+                            <div className="flex items-center gap-2">
+                                <Gauge className="w-5 h-5 text-[#E21E36]" />
+                                <span className="font-medium text-gray-900">Očekávaný výkon</span>
+                            </div>
+                            <div className="flex-1" />
+                            <div className="flex items-center gap-3 text-sm">
+                                <span className="text-gray-500">Minimum</span>
+                                <div className="w-48">
+                                    <Slider
+                                        value={[salaryExpectation]}
+                                        onValueChange={([val]) => setSalaryExpectation(val)}
+                                        min={0}
+                                        max={100}
+                                        step={5}
+                                    />
+                                </div>
+                                <span className="text-gray-500">Maximum</span>
+                            </div>
+                            <Badge variant="outline" className="text-[#E21E36] border-[#E21E36]/30 bg-[#E21E36]/5 font-semibold">
+                                {salaryExpectation}%
+                            </Badge>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                            Posuvníkem nastavte očekávané plnění variabilních složek mzdy (bonusů, prémií). 0% = minimum, 100% = maximum.
+                        </p>
+                    </CardContent>
                 </Card>
             </motion.div>
 
