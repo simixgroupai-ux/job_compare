@@ -228,7 +228,7 @@ export default function PositionsPage() {
 
             {/* Positions Grid */}
             {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {[...Array(6)].map((_, i) => (
                         <div
                             key={i}
@@ -250,7 +250,7 @@ export default function PositionsPage() {
                     </Button>
                 </motion.div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredPositions.map((position, index) => (
                         <PositionCard
                             key={position.id}

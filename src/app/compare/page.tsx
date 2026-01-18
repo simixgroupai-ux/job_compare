@@ -514,7 +514,7 @@ export default function ComparePage() {
                 </div>
 
                 {loading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {[...Array(4)].map((_, i) => (
                             <div
                                 key={i}
@@ -529,7 +529,7 @@ export default function ComparePage() {
                         </p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredPositions.map((position, index) => (
                             <PositionCard
                                 key={position.id}

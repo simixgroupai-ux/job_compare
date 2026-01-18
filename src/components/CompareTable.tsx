@@ -10,12 +10,13 @@ import {
     calculateGrossSalaryV2,
     calculateNetSalary,
     calculateBenefitValueV2,
-    getBenefitCalculationLabel
+    getBenefitCalculationLabel,
+    getBaseHourlyRate
 } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { X, Trophy } from "lucide-react";
+import { X, Trophy, Building2 } from "lucide-react";
 
 interface CompareTableProps {
     positions: JobPositionWithCompany[];
@@ -119,7 +120,7 @@ export function CompareTable({
             ? Math.round((p.base_hourly_rate || 0) * fund)
             : (p.base_salary || 0);
 
-        const totalBonuses = grossCurrent - baseMonthlySalary + (p.housing_allowance || 0);
+        const totalBonuses = grossCurrent - baseMonthlySalary;
 
         return { grossMin, grossMax, grossExp, grossCurrent, netMin, netMax, netExp, netCurrent, social, health, tax, totalBonuses };
     });
@@ -132,6 +133,7 @@ export function CompareTable({
     const allTotalBonusesSame = calculatedData.every(d => d.totalBonuses === calculatedData[0].totalBonuses);
     const allSocialSame = calculatedData.every(d => d.social === calculatedData[0].social);
     const allHealthSame = calculatedData.every(d => d.health === calculatedData[0].health);
+    const allHourlyRateSame = positions.every(p => getBaseHourlyRate(p) === getBaseHourlyRate(positions[0]));
 
     const bestNetCurrent = Math.max(...calculatedData.map(d => d.netCurrent));
     const bestGrossCurrent = Math.max(...calculatedData.map(d => d.grossCurrent));
@@ -140,6 +142,7 @@ export function CompareTable({
     const bestTotalBonuses = Math.max(...calculatedData.map(d => d.totalBonuses));
     const bestSocial = Math.min(...calculatedData.map(d => d.social)); // Lower is "best" for deductions (less taken)
     const bestHealth = Math.min(...calculatedData.map(d => d.health));
+    const bestHourlyRate = Math.max(...positions.map(p => getBaseHourlyRate(p)));
 
     // Get all unique benefits
     const benefitKeys = getAllBenefitKeys(positions);
@@ -171,8 +174,19 @@ export function CompareTable({
                                                 <div className="font-semibold text-gray-900 text-sm">
                                                     {position.position_name}
                                                 </div>
-                                                <div className="text-xs text-gray-500">
-                                                    {position.company?.name}
+                                                <div className="flex items-center gap-2">
+                                                    {position.company?.logo_url ? (
+                                                        <img
+                                                            src={position.company.logo_url}
+                                                            alt={position.company.name}
+                                                            className="w-5 h-5 rounded object-contain bg-white border border-gray-100"
+                                                        />
+                                                    ) : (
+                                                        <Building2 className="w-4 h-4 text-gray-400" />
+                                                    )}
+                                                    <div className="text-xs text-gray-500">
+                                                        {position.company?.name}
+                                                    </div>
                                                 </div>
                                             </div>
                                             <Button
@@ -210,6 +224,19 @@ export function CompareTable({
                                     return (
                                         <td key={p.id} className={`p-3 text-sm ${isBest ? 'text-[#E21E36] font-bold bg-[#E21E36]/5' : 'text-gray-700'}`}>
                                             {formatValue(p.base_salary, 'currency')}
+                                            {isBest && <Badge className="ml-2 bg-[#E21E36]/10 text-[#E21E36] text-[10px]">Nejlepší</Badge>}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                            <tr className="border-b hover:bg-gray-50/50">
+                                <td className="p-3 text-sm text-gray-600 font-medium">Hodinová mzda</td>
+                                {positions.map((p) => {
+                                    const hourlyRate = getBaseHourlyRate(p);
+                                    const isBest = !allHourlyRateSame && hourlyRate === bestHourlyRate && bestHourlyRate > 0;
+                                    return (
+                                        <td key={p.id} className={`p-3 text-sm ${isBest ? 'text-[#E21E36] font-bold bg-[#E21E36]/5' : 'text-gray-700'}`}>
+                                            {hourlyRate.toLocaleString("cs-CZ", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} Kč/h
                                             {isBest && <Badge className="ml-2 bg-[#E21E36]/10 text-[#E21E36] text-[10px]">Nejlepší</Badge>}
                                         </td>
                                     );
@@ -272,24 +299,7 @@ export function CompareTable({
                                         );
                                     })}
 
-                                    {/* Housing Allowance integrated into Bonuses section - only if at least one position has it */}
-                                    {bestHousing > 0 && (
-                                        <tr className="border-b hover:bg-gray-50/50">
-                                            <td className="p-3 text-sm text-gray-600 font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px]">
-                                                Příspěvek na ubytování
-                                            </td>
-                                            {positions.map((p) => {
-                                                const value = p.housing_allowance || 0;
-                                                const isBest = !allHousingSame && value === bestHousing && bestHousing > 0;
-                                                return (
-                                                    <td key={p.id} className={`p-3 text-sm ${isBest ? 'text-[#E21E36] font-bold bg-[#E21E36]/5' : value === 0 ? 'text-gray-400' : 'text-gray-700'}`}>
-                                                        {value > 0 ? formatValue(value, 'currency') : '—'}
-                                                        {isBest && value > 0 && <Badge className="ml-2 bg-[#E21E36]/10 text-[#E21E36] text-[10px]">Nejlepší</Badge>}
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
-                                    )}
+
 
                                     {/* Total Bonuses Sum */}
                                     <tr className="border-b bg-purple-50/30">
@@ -378,6 +388,30 @@ export function CompareTable({
                                     );
                                 })}
                             </tr>
+
+                            {/* Ubytování - separate section at the bottom */}
+                            {bestHousing > 0 && (
+                                <>
+                                    <tr className="bg-amber-50/30">
+                                        <td colSpan={positions.length + 1} className="p-2 text-xs font-semibold text-amber-700 uppercase tracking-wide">
+                                            Ostatní benefity
+                                        </td>
+                                    </tr>
+                                    <tr className="border-b hover:bg-gray-50/50">
+                                        <td className="p-3 text-sm text-gray-600 font-medium">Příspěvek na ubytování</td>
+                                        {positions.map((p) => {
+                                            const value = p.housing_allowance || 0;
+                                            const isBest = !allHousingSame && value === bestHousing && bestHousing > 0;
+                                            return (
+                                                <td key={p.id} className={`p-3 text-sm ${isBest ? 'text-[#E21E36] font-bold bg-[#E21E36]/5' : value === 0 ? 'text-gray-400' : 'text-gray-700'}`}>
+                                                    {value > 0 ? formatValue(value, 'currency') : '—'}
+                                                    {isBest && value > 0 && <Badge className="ml-2 bg-[#E21E36]/10 text-[#E21E36] text-[10px]">Nejlepší</Badge>}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                </>
+                            )}
 
 
                         </tbody>

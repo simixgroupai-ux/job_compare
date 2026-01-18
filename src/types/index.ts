@@ -410,7 +410,7 @@ export function calculateGrossSalaryV2(
         inputs.performancePercent = customInputs.performancePercent;
     }
 
-    let total = baseMonthlySalary + (position.housing_allowance || 0);
+    let total = baseMonthlySalary;
 
     for (const benefit of position.benefits || []) {
         if (isBenefitV2(benefit)) {

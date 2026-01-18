@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import {
     JobPositionWithCompany,
     BenefitV2,
@@ -24,6 +25,7 @@ import {
     Check,
     Gift,
     Home,
+    ExternalLink,
 } from "lucide-react";
 
 interface PositionCardProps {
@@ -95,21 +97,35 @@ export function PositionCard({
                 : "hover:shadow-lg border-gray-100"
                 }`}>
                 <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between">
-                        <div>
-                            <CardTitle className="text-lg text-gray-900">
-                                {position.position_name}
-                            </CardTitle>
-                            <div className="flex items-center gap-2 mt-1 text-sm text-gray-600">
-                                <Building2 className="w-4 h-4" />
-                                <span>{position.company?.name || "Neznámá firma"}</span>
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                            <Link href={`/positions/${position.id}`} className="hover:text-[#E21E36] transition-colors block">
+                                <CardTitle className="text-lg font-bold">
+                                    {position.position_name}
+                                </CardTitle>
+                            </Link>
+                            <div className="flex items-center gap-2 mt-1">
+                                {position.company?.logo_url ? (
+                                    <img
+                                        src={position.company.logo_url}
+                                        alt={position.company.name}
+                                        className="w-5 h-5 rounded object-contain bg-white border border-gray-100"
+                                    />
+                                ) : (
+                                    <Building2 className="w-4 h-4 text-gray-600" />
+                                )}
+                                <span className="text-sm text-gray-600 font-medium">{position.company?.name || "Neznámá firma"}</span>
                             </div>
                         </div>
                         {onToggleCompare && (
                             <Button
                                 size="sm"
                                 variant={isSelected ? "default" : "outline"}
-                                onClick={() => onToggleCompare(position)}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    onToggleCompare(position);
+                                }}
                                 className={isSelected ? "bg-[#E21E36] hover:bg-[#c91a2e]" : "border-[#E21E36] text-[#E21E36] hover:bg-[#E21E36]/10"}
                             >
                                 {isSelected ? (
@@ -214,6 +230,15 @@ export function PositionCard({
                             <span>Ubytování: {formatCurrency(position.housing_allowance)}</span>
                         </div>
                     )}
+
+                    <div className="pt-2">
+                        <Link href={`/positions/${position.id}`}>
+                            <Button variant="outline" size="sm" className="w-full text-xs gap-2 border-gray-200 hover:border-[#E21E36] hover:text-[#E21E36]">
+                                <ExternalLink className="w-3 h-3" />
+                                Zobrazit detail pozice
+                            </Button>
+                        </Link>
+                    </div>
                 </CardContent>
             </Card>
         </motion.div >
