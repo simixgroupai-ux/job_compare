@@ -17,6 +17,7 @@ import { PositionCard } from "@/components/PositionCard";
 import { CompareTable } from "@/components/CompareTable";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,7 +39,7 @@ export default function ComparePage() {
     const [loading, setLoading] = useState(true);
     const [selectedCompany, setSelectedCompany] = useState<string>("all");
     const [showDeductions, setShowDeductions] = useState(true);
-    const [salaryExpectation, setSalaryExpectation] = useState(50); // 0-100 scale from min to max
+    const [salaryExpectation, setSalaryExpectation] = useState<number | null>(null); // null means employer's expected values
 
     // User deductions state
     const [userDeductions, setUserDeductions] = useState<UserDeductions>(defaultUserDeductions);
@@ -358,31 +359,61 @@ export default function ComparePage() {
             >
                 <Card className="bg-white border-gray-100">
                     <CardContent className="pt-6">
-                        <div className="flex items-center gap-4 mb-4">
-                            <div className="flex items-center gap-2">
+                        <div className="flex flex-col md:flex-row md:items-center gap-6 mb-4">
+                            <div className="flex items-center gap-2 min-w-[160px]">
                                 <Gauge className="w-5 h-5 text-[#E21E36]" />
-                                <span className="font-medium text-gray-900">Očekávaný výkon</span>
+                                <span className="font-semibold text-gray-900">Simulace výkonu</span>
                             </div>
-                            <div className="flex-1" />
-                            <div className="flex items-center gap-3 text-sm">
-                                <span className="text-gray-500">Minimum</span>
-                                <div className="w-48">
+
+                            <div className={cn("flex-1 flex flex-col gap-2 transition-opacity duration-200", salaryExpectation === null && "opacity-50 grayscale pointer-events-none")}>
+                                <div className="flex items-center gap-4 text-xs font-medium text-gray-500">
+                                    <span className="w-12 text-right">RNOR (0%)</span>
                                     <Slider
-                                        value={[salaryExpectation]}
+                                        value={[salaryExpectation ?? 75]}
                                         onValueChange={([val]) => setSalaryExpectation(val)}
                                         min={0}
                                         max={100}
-                                        step={5}
+                                        step={1}
+                                        className="flex-1"
+                                        disabled={salaryExpectation === null}
                                     />
+                                    <span className="w-12">NORN (100%)</span>
                                 </div>
-                                <span className="text-gray-500">Maximum</span>
                             </div>
-                            <Badge variant="outline" className="text-[#E21E36] border-[#E21E36]/30 bg-[#E21E36]/5 font-semibold">
-                                {salaryExpectation}%
-                            </Badge>
+
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant={salaryExpectation === 0 ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setSalaryExpectation(0)}
+                                    className={salaryExpectation === 0 ? "bg-[#E21E36] hover:bg-[#c91a2e] text-white" : "text-gray-600"}
+                                >
+                                    Minimum
+                                </Button>
+                                <Button
+                                    variant={salaryExpectation === null ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setSalaryExpectation(null)}
+                                    className={salaryExpectation === null ? "bg-[#E21E36] hover:bg-[#c91a2e] text-white" : "text-gray-600"}
+                                >
+                                    Optimum
+                                </Button>
+                                <Button
+                                    variant={salaryExpectation === 100 ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setSalaryExpectation(100)}
+                                    className={salaryExpectation === 100 ? "bg-[#E21E36] hover:bg-[#c91a2e] text-white" : "text-gray-600"}
+                                >
+                                    Maximum
+                                </Button>
+                                <div className="ml-2 px-3 py-1 bg-[#E21E36]/10 text-[#E21E36] rounded-md font-bold min-w-[50px] text-center">
+                                    {salaryExpectation !== null ? `${salaryExpectation}%` : 'EXP'}
+                                </div>
+                            </div>
                         </div>
-                        <p className="text-xs text-gray-500">
-                            Posuvníkem nastavte očekávané plnění variabilních složek mzdy (bonusů, prémií). 0% = minimum, 100% = maximum.
+                        <p className="text-[11px] text-gray-500 bg-gray-50 p-2 rounded border border-gray-100 italic">
+                            💡 Posuvníkem simulujete své očekávané pracovní nasazení. To ovlivňuje výpočet bonusů, které jsou v datech zadány jako rozsah (od–do).
+                            <strong> Minimum (RNOR)</strong> je garantovaný základ, <strong>Maximum (NORN)</strong> je plný výkon.
                         </p>
                     </CardContent>
                 </Card>
@@ -452,6 +483,7 @@ export default function ComparePage() {
                         onRemove={removeFromCompare}
                         taxSettings={taxSettings}
                         userDeductions={userDeductions}
+                        performancePercent={salaryExpectation ?? undefined}
                     />
                 </motion.div>
             )}
@@ -506,6 +538,7 @@ export default function ComparePage() {
                                 isSelected={selectedPositions.some(p => p.id === position.id)}
                                 onToggleCompare={togglePosition}
                                 taxSettings={taxSettings}
+                                performancePercent={salaryExpectation ?? undefined}
                             />
                         ))}
                     </div>

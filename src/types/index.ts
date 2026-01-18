@@ -71,6 +71,7 @@ export interface CalculationInputs {
         shifts_per_month?: number;
         days_per_month?: number;
     };
+    performancePercent?: number; // 0-100 scale for range benefits
 }
 
 // =====================================================
@@ -218,16 +219,23 @@ export function calculateBenefitValueV2(
     // Determine the value to use (single value or from range)
     let inputValue = calc.value;
     if (range?.is_range) {
-        switch (mode) {
-            case 'min':
-                inputValue = range.min ?? 0;
-                break;
-            case 'max':
-                inputValue = range.max ?? calc.value;
-                break;
-            case 'expected':
-                inputValue = range.expected ?? range.min ?? calc.value;
-                break;
+        if (inputs.performancePercent !== undefined) {
+            // Numeric percentage mapping: min + (max - min) * (percent / 100)
+            const min = range.min ?? 0;
+            const max = range.max ?? calc.value;
+            inputValue = min + (max - min) * (inputs.performancePercent / 100);
+        } else {
+            switch (mode) {
+                case 'min':
+                    inputValue = range.min ?? 0;
+                    break;
+                case 'max':
+                    inputValue = range.max ?? calc.value;
+                    break;
+                case 'expected':
+                    inputValue = range.expected ?? range.min ?? calc.value;
+                    break;
+            }
         }
     }
 
@@ -393,8 +401,14 @@ export function calculateGrossSalaryV2(
         base_salary: baseMonthlySalary,
         working_hours_fund: fund,
         hourly_base: baseMonthlySalary / fund,
+        performancePercent: mode === 'min' ? 0 : mode === 'max' ? 100 : undefined,
         ...customInputs,
     };
+
+    // If mode is expected and we have customInputs.performancePercent, it takes precedence
+    if (mode === 'expected' && customInputs?.performancePercent !== undefined) {
+        inputs.performancePercent = customInputs.performancePercent;
+    }
 
     let total = baseMonthlySalary + (position.housing_allowance || 0);
 
@@ -415,62 +429,65 @@ export function roundUpTo100(value: number): number {
 }
 
 /**
- * Get total tax credits
+ * Get tax credits separated by type (personal vs children)
  */
 export function getTaxCredits(
     taxSettings: TaxSetting[],
     userDeductions: UserDeductions
-): number {
-    let credits = 0;
+): { personal: number; children: number } {
+    let personal = 0;
+    let children = 0;
 
+    // 1. Personal credits (can only reduce tax to 0)
     if (userDeductions.poplatnik) {
         const setting = taxSettings.find(t => t.key === 'sleva_poplatnik');
-        credits += setting?.value ?? 2570;
-    }
-
-    const pocetDeti = userDeductions.pocetDeti;
-    if (pocetDeti >= 1) {
-        const d1 = taxSettings.find(t => t.key === 'sleva_dite_1');
-        credits += d1?.value ?? 1267;
-    }
-    if (pocetDeti >= 2) {
-        const d2 = taxSettings.find(t => t.key === 'sleva_dite_2');
-        credits += d2?.value ?? 1860;
-    }
-    if (pocetDeti >= 3) {
-        const d3 = taxSettings.find(t => t.key === 'sleva_dite_3');
-        credits += (d3?.value ?? 2320) * (pocetDeti - 2);
+        personal += setting?.value ?? 2570;
     }
 
     switch (userDeductions.invaliditaTyp) {
         case 'inv1': {
             const setting = taxSettings.find(t => t.key === 'sleva_inv_1');
-            credits += setting?.value ?? 210;
+            personal += setting?.value ?? 210;
             break;
         }
         case 'inv2': {
             const setting = taxSettings.find(t => t.key === 'sleva_inv_2');
-            credits += setting?.value ?? 210;
+            personal += setting?.value ?? 210;
             break;
         }
         case 'inv3': {
             const setting = taxSettings.find(t => t.key === 'sleva_inv_3');
-            credits += setting?.value ?? 420;
+            personal += setting?.value ?? 420;
             break;
         }
     }
 
     if (userDeductions.ztpp) {
         const setting = taxSettings.find(t => t.key === 'sleva_ztpp');
-        credits += setting?.value ?? 1345;
+        personal += setting?.value ?? 1345;
     }
 
     if (userDeductions.student) {
         const setting = taxSettings.find(t => t.key === 'sleva_student');
-        credits += setting?.value ?? 335;
+        personal += setting?.value ?? 335;
     }
 
-    return credits;
+    // 2. Child credits (can result in tax bonus)
+    const pocetDeti = userDeductions.pocetDeti;
+    if (pocetDeti >= 1) {
+        const d1 = taxSettings.find(t => t.key === 'sleva_dite_1');
+        children += d1?.value ?? 1267;
+    }
+    if (pocetDeti >= 2) {
+        const d2 = taxSettings.find(t => t.key === 'sleva_dite_2');
+        children += d2?.value ?? 1860;
+    }
+    if (pocetDeti >= 3) {
+        const d3 = taxSettings.find(t => t.key === 'sleva_dite_3');
+        children += (d3?.value ?? 2320) * (pocetDeti - 2);
+    }
+
+    return { personal, children };
 }
 
 /**
@@ -496,17 +513,23 @@ export function calculateNetSalary(
     const healthDeduction = Math.round(grossSalary * (healthRate / 100));
     const taxBase = roundUpTo100(grossSalary);
     const taxBeforeCredits = Math.round(taxBase * (taxRate / 100));
-    const taxCredits = getTaxCredits(taxSettings, userDeductions);
-    const taxAfterCredits = Math.max(0, taxBeforeCredits - taxCredits);
-    const netSalary = grossSalary - socialDeduction - healthDeduction - taxAfterCredits;
+    const { personal, children } = getTaxCredits(taxSettings, userDeductions);
+
+    // Apply personal credits (capped at tax amount)
+    const taxAfterPersonal = Math.max(0, taxBeforeCredits - personal);
+
+    // Apply child credits (can result in tax bonus / negative tax)
+    const taxFinal = taxAfterPersonal - children;
+
+    const netSalary = grossSalary - socialDeduction - healthDeduction - taxFinal;
 
     return {
         net: Math.round(netSalary),
         social: socialDeduction,
         health: healthDeduction,
         taxBeforeCredits,
-        taxCredits: Math.min(taxCredits, taxBeforeCredits),
-        taxAfterCredits,
+        taxCredits: personal + children,
+        taxAfterCredits: taxFinal,
     };
 }
 

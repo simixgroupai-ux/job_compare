@@ -32,6 +32,7 @@ interface PositionCardProps {
     isSelected?: boolean;
     onToggleCompare?: (position: JobPositionWithCompany) => void;
     taxSettings?: TaxSetting[];
+    performancePercent?: number;
 }
 
 export function PositionCard({
@@ -39,7 +40,8 @@ export function PositionCard({
     index = 0,
     isSelected = false,
     onToggleCompare,
-    taxSettings: externalTaxSettings
+    taxSettings: externalTaxSettings,
+    performancePercent
 }: PositionCardProps) {
     const [taxSettings, setTaxSettings] = useState<TaxSetting[]>(externalTaxSettings || []);
 
@@ -58,8 +60,16 @@ export function PositionCard({
     // Calculate salaries dynamically using v2
     const grossMin = calculateGrossSalaryV2(position, 'min');
     const grossMax = calculateGrossSalaryV2(position, 'max');
+    const grossExpected = calculateGrossSalaryV2(position, 'expected');
+
+    // Use performancePercent if provided
+    const grossCurrent = performancePercent !== undefined
+        ? calculateGrossSalaryV2(position, 'expected', { performancePercent })
+        : grossExpected;
+
     const { net: netMin } = calculateNetSalary(grossMin, taxSettings, defaultUserDeductions);
     const { net: netMax } = calculateNetSalary(grossMax, taxSettings, defaultUserDeductions);
+    const { net: netCurrent } = calculateNetSalary(grossCurrent, taxSettings, defaultUserDeductions);
 
     const getHighlightedBenefits = (): BenefitV2[] => {
         if (!position.benefits || !Array.isArray(position.benefits)) return [];
@@ -130,25 +140,25 @@ export function PositionCard({
 
                     {/* Net Salary (calculated) */}
                     <div className="bg-gradient-to-r from-[#E21E36]/5 to-[#E21E36]/10 rounded-lg p-3 border border-[#E21E36]/20">
-                        <div className="flex items-center gap-2 mb-2">
-                            <TrendingUp className="w-4 h-4 text-[#E21E36]" />
-                            <span className="text-sm font-medium text-[#E21E36]">Čistá mzda</span>
-                        </div>
-                        <div className="flex items-baseline gap-2">
-                            <span className="text-xl font-bold text-[#E21E36]">
-                                {formatCurrency(netMin)}
-                            </span>
-                            {netMax > netMin && (
-                                <>
-                                    <span className="text-gray-400">–</span>
-                                    <span className="text-xl font-bold text-[#E21E36]">
-                                        {formatCurrency(netMax)}
-                                    </span>
-                                </>
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                                <TrendingUp className="w-4 h-4 text-[#E21E36]" />
+                                <span className="text-sm font-medium text-[#E21E36]">Čistá mzda</span>
+                            </div>
+                            {performancePercent !== undefined && (
+                                <Badge variant="outline" className="text-[10px] h-4 py-0 border-[#E21E36]/30 text-[#E21E36] bg-white">
+                                    {performancePercent}% výkon
+                                </Badge>
                             )}
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                            (se slevou na poplatníka)
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-2xl font-bold text-[#E21E36]">
+                                {formatCurrency(netCurrent)}
+                            </span>
+                        </div>
+                        <div className="text-[10px] text-gray-500 mt-1">
+                            Rozsah: {formatCurrency(netMin)} – {formatCurrency(netMax)}
+                            <span className="ml-1 opacity-60">(se slevou na poplatníka)</span>
                         </div>
                     </div>
 
@@ -206,6 +216,6 @@ export function PositionCard({
                     )}
                 </CardContent>
             </Card>
-        </motion.div>
+        </motion.div >
     );
 }
